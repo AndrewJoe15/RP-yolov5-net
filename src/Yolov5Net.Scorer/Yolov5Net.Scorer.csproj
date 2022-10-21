@@ -1,24 +1,36 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <Product>Yolov5Net</Product>
-        <AssemblyVersion>1.0.9.0</AssemblyVersion>
-        <FileVersion>1.0.9.0</FileVersion>
+        <Product>Yolov5Net-Faster</Product>
+        <AssemblyVersion>1.0.2203.1808</AssemblyVersion>
+        <FileVersion>1.0.2203.1808</FileVersion>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <PackageId>Yolov5Net</PackageId>
+        <PackageId>Yolov5Net-Faster</PackageId>
         <Description>YOLOv5 object detection with C#, ML.NET, ONNX.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageTags>c-sharp machine-learning object-detection yolo yolov5 ml-net onnx</PackageTags>
-        <RepositoryUrl>https://github.com/mentalstack/yolov5-net</RepositoryUrl>
-        <PackageProjectUrl>https://github.com/mentalstack/yolov5-net</PackageProjectUrl>
+        <RepositoryUrl>http://10.17.169.13/forest-fire-control/Yolov5Net-Faster</RepositoryUrl>
+        <PackageProjectUrl>http://10.17.169.13/forest-fire-control/Yolov5Net-Faster</PackageProjectUrl>
         <NeutralLanguage>en</NeutralLanguage>
-        <Copyright>© Mentalstack 2016-2021</Copyright>
-        <Authors>Mentalstack</Authors>
-        <Version>1.0.9</Version>
+        <Copyright></Copyright>
+        <Authors>KC</Authors>
+        <Version>1.0.2203.1808</Version>
+        <Platforms>AnyCPU;x64</Platforms>
+        <ApplicationIcon />
+        <OutputType>Library</OutputType>
+        <StartupObject />
+        <SignAssembly>false</SignAssembly>
+        <AssemblyOriginatorKeyFile>Yolov5Net-Faster.snk</AssemblyOriginatorKeyFile>
+        <Company>KC</Company>
+        <AssemblyName>Yolov5NetFaster.Scorer</AssemblyName>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -26,13 +38,20 @@
         <Optimize>false</Optimize>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+      <Optimize>false</Optimize>
+    </PropertyGroup>
+
     <ItemGroup>
         <Folder Include="Abstract\" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.9.0" />
-        <PackageReference Include="System.Drawing.Common" Version="5.0.2" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.10.0" />
+        <PackageReference Include="OpenCL.Net" Version="2.2.9" />
+        <PackageReference Include="OpenCvSharp4" Version="4.1.1.20191216" />
+        <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
     </ItemGroup>
 
 </Project>

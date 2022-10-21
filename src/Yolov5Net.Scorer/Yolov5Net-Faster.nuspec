@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package >
+  <metadata>
+    <id>Yolov5Net-Faster</id>
+    <version>1.0.2203.1808</version>
+    <title>Yolov5Net-Faster</title>
+    <authors>KC</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <!-- <icon>icon.png</icon> -->
+    <projectUrl>http://10.17.169.13/forest-fire-control/shaftwatcher/ShaftWatcherComponents</projectUrl>
+    <description>Yolov5-net优化版本，使用OpenCl和OpenCv加速图片数据转成张量数据。</description>
+    <releaseNotes><!--Summary of changes made in this release of the package.--></releaseNotes>
+    <copyright>$copyright$</copyright>
+    <tags>Log Util Utils</tags>
+    <dependencies>
+      <group>
+        <dependency id="Microsoft.ML.OnnxRuntime.Managed" version="1.10.0"/>
+        <dependency id="OpenCvSharp4" version="4.1.1.20191216"/>
+        <dependency id="System.Drawing.Common" version="6.0.0"/>
+        <dependency id="OpenCL.Net" version="2.2.9"/>
+      </group>
+    </dependencies>
+  </metadata>
+</package>

@@ -1,18 +1,29 @@
-﻿using System;
+﻿using Microsoft.ML.OnnxRuntime;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using Yolov5Net.Scorer;
-using Yolov5Net.Scorer.Models;
 
 namespace Yolov5Net.App
 {
     class Program
     {
+        public static object EasyCl { get; private set; }
+
         static void Main(string[] args)
         {
-            using var image = Image.FromFile("Assets/test.jpg");
+            // 单张测试
+            PredictTest();
+            // 性能测试
+            BenchMark();
+        }
+        private static void PredictTest()
+        {
+            using var image = Image.FromFile("Assets/guangui_2554.jpg");
 
-            using var scorer = new YoloScorer<YoloCocoP5Model>("Assets/Weights/yolov5n.onnx");
+            using var scorer = new YoloScorer<TrackModel>("Assets/Weights/track_n.onnx");
 
             List<YoloPrediction> predictions = scorer.Predict(image);
 
@@ -33,6 +44,43 @@ namespace Yolov5Net.App
             }
 
             image.Save("Assets/result.jpg");
+        }
+
+        private static void BenchMark()
+        {
+            var sw = new Stopwatch();
+            SessionOptions sessionOptions = new SessionOptions();
+            sessionOptions.AppendExecutionProvider_CUDA();
+            using (var image = Image.FromFile("Assets/guangui_2554.jpg"))
+            using (var scorer = new YoloScorer<TrackModel>("Assets/Weights/track_n.onnx", sessionOptions))
+            {
+                List<long> stats = new List<long>();
+
+                for (int i = 0; i < 100; i++)
+                {
+                    sw.Restart();
+                    scorer.Predict(image);
+                    long fps = 1000 / sw.ElapsedMilliseconds;
+                    stats.Add(fps);
+                    sw.Stop();
+                }
+
+                stats.Sort();
+                Console.WriteLine($@"
+                    Max FPS: {stats[stats.Count - 1]}
+                    Avg FPS: {Avg(stats)}
+                    Min FPS: {stats[0]}
+                ");
+            }
+        }
+        private static int Avg(List<long> stats)
+        {
+            long sum = 0;
+            foreach (long i in stats)
+            {
+                sum += i;
+            }
+            return (int)(sum / stats.Count);
         }
     }
 }

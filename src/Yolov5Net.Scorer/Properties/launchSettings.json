@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Yolov5Net.Scorer": {
+      "commandName": "Project",
+      "nativeDebugging": false
+    }
+  }
+}

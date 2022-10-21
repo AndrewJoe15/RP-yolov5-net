@@ -1,29 +1,28 @@
-# Yolov5Net
+# Yolov5Net-Faster
 YOLOv5 object detection with ML.NET, ONNX
 
 ![example](https://github.com/mentalstack/yolov5-net/blob/master/img/result.jpg?raw=true)
 
-## Installation
-
-Run this line from Package Manager Console:
-
-```
-Install-Package Yolov5Net -Version 1.0.9
-```
+## Runtime dependencies
 
 For CPU usage run this line from Package Manager Console:
 
 ```
-Install-Package Microsoft.ML.OnnxRuntime -Version 1.9.0
+Install-Package Microsoft.ML.OnnxRuntime -Version 1.10.0
 ```
 
 For GPU usage run this line from Package Manager Console:
 
 ```
-Install-Package Microsoft.ML.OnnxRuntime.Gpu -Version 1.9.0
+Install-Package Microsoft.ML.OnnxRuntime.Gpu -Version 1.10.0
 ```
 
 CPU and GPU packages can't be installed together.
+
+OpenCvSharp4 runtime.Install a proper package corresponding to your environment.
+```
+Install-Package OpenCvSharp4.runtime.win -Version 4.1.1.20191216
+``` 
 
 ## Usage
 
@@ -57,3 +56,19 @@ foreach (var prediction in predictions) // iterate predictions to draw results
 image.Save("Assets/result.jpg");
 ```
 
+## What is the difference? Where is fast?
+I use OpenCl to do the floating-point operations that convert the image data to the tensor that is the input of the inference.
+The time cost is reduced from about 30ms to about 8ms.
+
+I use OpenCv to resize image.The time cost is reduced from about 11ms to about 5ms.
+
+Reduce nested Parallels to one Parallel.The time cost is reduced from about 10ms to about 5ms.
+
+I run in CPU mode and the average FPS is about 23.
+My device info:
+CPU	11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz   2.42 GHz
+RAM	16.0 GB (15.7 GB 可用)
+系统类型	64 位操作系统, 基于 x64 的处理器
+版本	Windows 11 家庭中文版
+版本	21H2
+GPU: Intel Iris Xe Graphics

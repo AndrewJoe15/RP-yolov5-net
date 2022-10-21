@@ -1,8 +1,12 @@
 ﻿using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using OpenCL.Net;
+using OpenCvSharp;
+using OpenCvSharp.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -84,39 +88,54 @@ namespace Yolov5Net.Scorer
             return output;
         }
 
+        private OclCaller oclCaller;
         /// <summary>
         /// Extracts pixels into tensor for net input.
         /// </summary>
         private Tensor<float> ExtractPixels(Image image)
         {
             var bitmap = (Bitmap)image;
+            int[] imgData = PrepareImgData(bitmap);
+            float[] receive;
+            //stopwatch.Restart();
+            oclCaller.Compute(imgData, out receive);
+            //Console.WriteLine("Compute:" + stopwatch.ElapsedMilliseconds);
 
-            var rectangle = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
-            BitmapData bitmapData = bitmap.LockBits(rectangle, ImageLockMode.ReadOnly, bitmap.PixelFormat);
-            int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
-
-            var tensor = new DenseTensor<float>(new[] { 1, 3, _model.Height, _model.Width });
-
-            unsafe // speed up conversion by direct work with memory
-            {
-                Parallel.For(0, bitmapData.Height, (y) =>
-                {
-                    byte* row = (byte*)bitmapData.Scan0 + (y * bitmapData.Stride);
-
-                    Parallel.For(0, bitmapData.Width, (x) =>
-                    {
-                        tensor[0, 0, y, x] = row[x * bytesPerPixel + 2] / 255.0F; // r
-                        tensor[0, 1, y, x] = row[x * bytesPerPixel + 1] / 255.0F; // g
-                        tensor[0, 2, y, x] = row[x * bytesPerPixel + 0] / 255.0F; // b
-                    });
-                });
-
-                bitmap.UnlockBits(bitmapData);
-            }
-
-            return tensor;
+            return new DenseTensor<float>(receive, new int[] { 1, 3, _model.Height, _model.Width });
         }
 
+        private int[] PrepareImgData(Bitmap bitmap)
+        {
+            var rectangle = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            BitmapData bitmapData = bitmap.LockBits(rectangle, ImageLockMode.ReadOnly, bitmap.PixelFormat);
+            try
+            {
+                int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
+                int[] result = new int[1 * bytesPerPixel * _model.Height * _model.Width];
+
+                int layer = _model.Height * _model.Width;
+                unsafe // speed up conversion by direct work with memory
+                {
+                    Parallel.For(0, bitmapData.Height, (y) =>
+                    {
+                        byte* r = (byte*)bitmapData.Scan0 + (y * bitmapData.Stride);
+                        for (int x = 0; x < bitmapData.Width; x++)
+                        {
+                            result[layer * 0 + y * _model.Width + x] = r[x * bytesPerPixel + 2];
+                            result[layer * 1 + y * _model.Width + x] = r[x * bytesPerPixel + 1];
+                            result[layer * 2 + y * _model.Width + x] = r[x * bytesPerPixel + 0];
+                        }
+                    });
+                }
+                return result;
+            }
+            finally
+            {
+                bitmap.UnlockBits(bitmapData);
+            }
+        }
+
+        private Stopwatch stopwatch = new Stopwatch();
         /// <summary>
         /// Runs inference session.
         /// </summary>
@@ -126,7 +145,9 @@ namespace Yolov5Net.Scorer
 
             if (image.Width != _model.Width || image.Height != _model.Height)
             {
+                //stopwatch.Restart();
                 resized = ResizeImage(image); // fit image size to specified input size
+                //Console.WriteLine("Resize:" + stopwatch.ElapsedMilliseconds);
             }
 
             var inputs = new List<NamedOnnxValue> // add image as onnx input
@@ -134,7 +155,9 @@ namespace Yolov5Net.Scorer
                 NamedOnnxValue.CreateFromTensor("images", ExtractPixels(resized ?? image))
             };
 
+            //stopwatch.Restart();
             IDisposableReadOnlyCollection<DisposableNamedOnnxValue> result = _inferenceSession.Run(inputs); // run inference
+            //Console.WriteLine("Inference:" + stopwatch.ElapsedMilliseconds);
 
             var output = new List<DenseTensor<float>>();
 
@@ -163,14 +186,11 @@ namespace Yolov5Net.Scorer
             {
                 if (output[0, i, 4] <= _model.Confidence) return; // skip low obj_conf results
 
-                Parallel.For(5, _model.Dimensions, (j) =>
+                for (int j = 5; j < _model.Dimensions; j++)
                 {
                     output[0, i, j] = output[0, i, j] * output[0, i, 4]; // mul_conf = obj_conf * cls_conf
-                });
 
-                Parallel.For(5, _model.Dimensions, (k) =>
-                {
-                    if (output[0, i, k] <= _model.MulConfidence) return; // skip low mul_conf results
+                    if (output[0, i, j] <= _model.MulConfidence) continue; // skip low mul_conf results
 
                     float xMin = ((output[0, i, 0] - output[0, i, 2] / 2) - xPad) / gain; // unpad bbox tlx to original
                     float yMin = ((output[0, i, 1] - output[0, i, 3] / 2) - yPad) / gain; // unpad bbox tly to original
@@ -182,15 +202,15 @@ namespace Yolov5Net.Scorer
                     xMax = Clamp(xMax, 0, w - 1); // clip bbox brx to boundaries
                     yMax = Clamp(yMax, 0, h - 1); // clip bbox bry to boundaries
 
-                    YoloLabel label = _model.Labels[k - 5];
+                    YoloLabel label = _model.Labels[j - 5];
 
-                    var prediction = new YoloPrediction(label, output[0, i, k])
+                    var prediction = new YoloPrediction(label, output[0, i, j])
                     {
                         Rectangle = new RectangleF(xMin, yMin, xMax - xMin, yMax - yMin)
                     };
 
                     result.Add(prediction);
-                });
+                }
             });
 
             return result.ToList();
@@ -213,11 +233,11 @@ namespace Yolov5Net.Scorer
             {
                 int shapes = _model.Shapes[i]; // shapes per output
 
-                Parallel.For(0, _model.Anchors[0].Length, (a) => // iterate anchors
+                for (int a = 0; a < _model.Anchors[0].Length; a++)
                 {
-                    Parallel.For(0, shapes, (y) => // iterate shapes (rows)
+                    for (int y = 0; y < shapes; y++)
                     {
-                        Parallel.For(0, shapes, (x) => // iterate shapes (columns)
+                        for (int x = 0; x < shapes; x++)
                         {
                             int offset = (shapes * shapes * a + shapes * y + x) * _model.Dimensions;
 
@@ -252,9 +272,9 @@ namespace Yolov5Net.Scorer
                             };
 
                             result.Add(prediction);
-                        });
-                    });
-                });
+                        }
+                    }
+                }
             });
 
             return result.ToList();
@@ -265,7 +285,10 @@ namespace Yolov5Net.Scorer
         /// </summary>
         private List<YoloPrediction> ParseOutput(DenseTensor<float>[] output, Image image)
         {
-            return _model.UseDetect ? ParseDetect(output[0], image) : ParseSigmoid(output, image);
+            //stopwatch.Restart();
+            List<YoloPrediction> predictions = _model.UseDetect ? ParseDetect(output[0], image) : ParseSigmoid(output, image);
+            //Console.WriteLine("output:" + stopwatch.ElapsedMilliseconds);
+            return predictions;
         }
 
         /// <summary>
@@ -316,6 +339,8 @@ namespace Yolov5Net.Scorer
         public YoloScorer()
         {
             _model = Activator.CreateInstance<T>();
+            oclCaller = new OclCaller();
+            oclCaller.Init();
         }
 
         /// <summary>
@@ -351,6 +376,152 @@ namespace Yolov5Net.Scorer
         public void Dispose()
         {
             _inferenceSession.Dispose();
+            oclCaller.Dispose();
+        }
+    }
+
+
+    internal class OclCaller : IDisposable
+    {
+        private const string clCode = @"
+            __kernel void img_to_tensor(__global int* src_a, __global float* res)
+            {
+                const int idx = get_global_id(0);
+                res[idx] = src_a[idx]/255.0f;
+            }
+            ";
+
+        private Context context;
+        private CommandQueue commandQueue;
+        private Dictionary<string, Kernel> kernels;
+        //TODO 640*640*3的图像，计算下来用9ms左右。必须要有GPU（可以不是英伟达）才进行运算。多GPU或CPU+GPU运算应该可以更快。
+        internal void Init()
+        {
+            OpenCL.Net.ErrorCode errorCode;
+            Platform[] platforms = Cl.GetPlatformIDs(out errorCode);
+            CheckErrorCode(errorCode);
+
+            List<Device> devicesList = new List<Device>();
+            foreach (Platform platform in platforms)
+            {
+                string platformName = Cl.GetPlatformInfo(platform, OpenCL.Net.PlatformInfo.Name, out errorCode).ToString();
+                CheckErrorCode(errorCode);
+
+                Console.WriteLine("Platform: " + platformName);
+                //We will be looking only for GPU devices
+                foreach (OpenCL.Net.Device device in Cl.GetDeviceIDs(platform, OpenCL.Net.DeviceType.Gpu, out errorCode))
+                {
+                    CheckErrorCode(errorCode);
+
+                    Console.WriteLine("Device: " + device.ToString());
+                    devicesList.Add(device);
+                }
+            }
+            if (devicesList.Count <= 0)
+            {
+                throw new Exception("No devices found.");
+            }
+            //选中运算设备,这里选第一个其它的释放掉
+            var oclDevice = devicesList[0];
+
+            //根据配置建立上下文
+            context = Cl.CreateContext(null, 1, new[] { oclDevice }, null, IntPtr.Zero, out errorCode);
+            CheckErrorCode(errorCode);
+
+            commandQueue = Cl.CreateCommandQueue(context, oclDevice, CommandQueueProperties.OutOfOrderExecModeEnable, out errorCode);
+            CheckErrorCode(errorCode);
+
+            //定义一个字典用来存放所有核
+            kernels = new Dictionary<string, Kernel>();
+            using (var program = Cl.CreateProgramWithSource(context, 1, new[] { clCode }, null, out errorCode))
+            {
+                CheckErrorCode(errorCode);
+
+                errorCode = Cl.BuildProgram(program, 1, new[] { oclDevice }, "", null, IntPtr.Zero);
+                CheckErrorCode(errorCode);
+
+                foreach (var item in new[] { "img_to_tensor" })
+                {
+                    kernels.Add(item, Cl.CreateKernel(program, item, out errorCode));
+                    CheckErrorCode(errorCode);
+                }
+            }
+        }
+
+        internal void Compute(int[] a, out float[] output)
+        {
+            output = new float[a.Length];
+
+            OpenCL.Net.ErrorCode errorCode;
+
+            Event eventExecutedVectorAddGpu;
+            Event eventExecutedReadResult;
+            IMem<int> n1 = null;
+            IMem<float> n3 = null;
+            try
+            {
+                #region 创建并传参
+                //在显存创建缓冲区并把HOST的数据拷贝过去
+                n1 = Cl.CreateBuffer(context, MemFlags.CopyHostPtr, a, out errorCode);
+                CheckErrorCode(errorCode);
+                //还有一个缓冲区用来接收回参
+                n3 = Cl.CreateBuffer(context, MemFlags.CopyHostPtr, output, out errorCode);
+                CheckErrorCode(errorCode);
+
+                //把参数填进Kernel里
+                errorCode = Cl.SetKernelArg(kernels["img_to_tensor"], 0, n1);
+                CheckErrorCode(errorCode);
+                errorCode = Cl.SetKernelArg(kernels["img_to_tensor"], 1, n3);
+                CheckErrorCode(errorCode);
+                #endregion
+
+                //把调用请求添加到队列里,参数分别是:Kernel,数据的维度,每个维度的全局工作项ID偏移,每个维度工作项数量(我们这里有4个数据,所以设为4),每个维度的工作组长度(这里设为每4个一组)
+                errorCode = Cl.EnqueueNDRangeKernel(commandQueue, kernels["img_to_tensor"], 1, null, new[] { (IntPtr)(a.Length) }, new[] { (IntPtr)1 }, 0, null, out eventExecutedVectorAddGpu);
+                CheckErrorCode(errorCode);
+                //添加一个读取数据命令到队列里,用来读取运算结果
+                errorCode = Cl.EnqueueReadBuffer(commandQueue, n3, Bool.True, output, 1, new[] { eventExecutedVectorAddGpu }, out eventExecutedReadResult);
+                CheckErrorCode(errorCode);
+                //开始执行
+                errorCode = Cl.Finish(commandQueue);
+                CheckErrorCode(errorCode);
+
+                eventExecutedVectorAddGpu.Dispose();
+                eventExecutedReadResult.Dispose();
+            }
+            finally
+            {
+                if (n1 != null)
+                {
+                    n1.Dispose();
+                }
+                if (n3 != null)
+                {
+                    n3.Dispose();
+                }
+            }
+        }
+
+        private static void CheckErrorCode(OpenCL.Net.ErrorCode errorCode)
+        {
+            if (errorCode != OpenCL.Net.ErrorCode.Success)
+            {
+                throw new Exception(errorCode.ToString());
+            }
+        }
+
+        internal void Dispose()
+        {
+            context.Dispose();
+            commandQueue.Dispose();
+            foreach (var k in kernels.Values)
+            {
+                k.Dispose();
+            }
+        }
+
+        void IDisposable.Dispose()
+        {
+            this.Dispose();
         }
     }
 }
