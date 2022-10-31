@@ -6,6 +6,7 @@ using OpenCvSharp.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -21,9 +22,15 @@ namespace Yolov5Net.Scorer
     /// <summary>
     /// Yolov5 scorer.
     /// </summary>
-    public class YoloScorer<T> : IDisposable where T : YoloModel
+    public class YoloScorer : IDisposable
     {
-        private readonly T _model;
+        public YoloModel model
+        {
+            get => _model;
+            set => _model = value;
+        }
+
+        private YoloModel _model;
 
         private readonly InferenceSession _inferenceSession;
 
@@ -334,28 +341,26 @@ namespace Yolov5Net.Scorer
         }
 
         /// <summary>
-        /// Creates new instance of YoloScorer.
-        /// </summary>
-        public YoloScorer()
-        {
-            _model = Activator.CreateInstance<T>();
-            oclCaller = new OclCaller();
-            oclCaller.Init();
-        }
-
-        /// <summary>
         /// Creates new instance of YoloScorer with weights path and options.
         /// </summary>
-        public YoloScorer(string weights, SessionOptions opts = null) : this()
+        public YoloScorer(YoloModel yoloModel, string weights, SessionOptions opts = null)
         {
+            _model = yoloModel;
+            oclCaller = new OclCaller();
+            oclCaller.Init();
+
             _inferenceSession = new InferenceSession(File.ReadAllBytes(weights), opts ?? new SessionOptions());
         }
 
         /// <summary>
         /// Creates new instance of YoloScorer with weights stream and options.
         /// </summary>
-        public YoloScorer(Stream weights, SessionOptions opts = null) : this()
+        public YoloScorer(YoloModel yoloModel, Stream weights, SessionOptions opts = null)
         {
+            _model = yoloModel;
+            oclCaller = new OclCaller();
+            oclCaller.Init();
+
             using (var reader = new BinaryReader(weights))
             {
                 _inferenceSession = new InferenceSession(reader.ReadBytes((int)weights.Length), opts ?? new SessionOptions());
@@ -365,8 +370,12 @@ namespace Yolov5Net.Scorer
         /// <summary>
         /// Creates new instance of YoloScorer with weights bytes and options.
         /// </summary>
-        public YoloScorer(byte[] weights, SessionOptions opts = null) : this()
+        public YoloScorer(YoloModel yoloModel, byte[] weights, SessionOptions opts = null)
         {
+            _model = yoloModel;
+            oclCaller = new OclCaller();
+            oclCaller.Init();
+
             _inferenceSession = new InferenceSession(weights, opts ?? new SessionOptions());
         }
 
