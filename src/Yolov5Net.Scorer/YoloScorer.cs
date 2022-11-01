@@ -6,6 +6,7 @@ using OpenCvSharp.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
@@ -15,7 +16,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Yolov5Net.Scorer.Extensions;
-using Yolov5Net.Scorer.Models.Abstract;
 
 namespace Yolov5Net.Scorer
 {
@@ -181,7 +181,8 @@ namespace Yolov5Net.Scorer
         /// </summary>
         private List<YoloPrediction> ParseDetect(DenseTensor<float> output, Image image)
         {
-            var result = new ConcurrentBag<YoloPrediction>();
+            // 不可改变的有序集合
+            var result = ImmutableSortedSet.Create<YoloPrediction>();
 
             var (w, h) = (image.Width, image.Height); // image w and h
             var (xGain, yGain) = (_model.Width / (float)w, _model.Height / (float)h); // x, y gains
@@ -216,11 +217,17 @@ namespace Yolov5Net.Scorer
                         Rectangle = new RectangleF(xMin, yMin, xMax - xMin, yMax - yMin)
                     };
 
-                    result.Add(prediction);
+                    // 先转为builder，提高效率
+                    var builder = result.ToBuilder();
+                    // 添加预测结果
+                    builder.Add(prediction);
+                    // 转为不可变集合
+                    result = builder.ToImmutable();
                 }
             });
 
-            return result.ToList();
+            // 返回前MaxDetections个结果
+            return result.Take(model.MaxDetections).ToList();
         }
 
         /// <summary>
@@ -348,8 +355,11 @@ namespace Yolov5Net.Scorer
             _model = yoloModel;
             oclCaller = new OclCaller();
             oclCaller.Init();
-
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
             _inferenceSession = new InferenceSession(File.ReadAllBytes(weights), opts ?? new SessionOptions());
+            sw.Stop();
+            Debug.WriteLine(sw.ElapsedMilliseconds);
         }
 
         /// <summary>
