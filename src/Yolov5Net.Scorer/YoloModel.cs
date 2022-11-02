@@ -12,7 +12,7 @@ namespace Yolov5Net.Scorer
         public int Height { get; set; } = 640;
         public int Depth { get; set; } = 3;
 
-        public int Dimensions { get; set; }
+        public int Dimensions { get => Labels.Count + 5;}
 
         public int[] Strides { get; set; } = new int[] { 8, 16, 32 };
         public int[][][] Anchors { get; set; } = new int[][][]
@@ -74,7 +74,7 @@ namespace Yolov5Net.Scorer
         }
 
         public string[] Outputs { get; set; } = new[] { "output" };
-        public List<YoloLabel> Labels { get; set; }
+        public List<YoloLabel> Labels { get; set; } = new List<YoloLabel>();
         public bool UseDetect { get; set; } = true;
 
 

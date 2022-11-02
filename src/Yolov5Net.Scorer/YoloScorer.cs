@@ -170,7 +170,19 @@ namespace Yolov5Net.Scorer
 
             foreach (var item in _model.Outputs) // add outputs for processing
             {
-                output.Add(result.First(x => x.Name == item).Value as DenseTensor<float>);
+                try
+                {
+                    // 获取结果 name == "output" name == "output0" ...
+                    output.Add(result.First(x => x.Name == item).Value as DenseTensor<float>);
+                }
+                catch (Exception e)
+                {
+                    // 如果result.First() 没有找到元素 则跳过
+                    if (e.GetType() == typeof(InvalidOperationException))
+                    {
+                        continue;
+                    }
+                }
             };
 
             return output.ToArray();
@@ -352,7 +364,6 @@ namespace Yolov5Net.Scorer
         /// </summary>
         public YoloScorer(YoloModel yoloModel, string weights, SessionOptions opts = null)
         {
-            _model = yoloModel;
             oclCaller = new OclCaller();
             oclCaller.Init();
             Stopwatch sw = new Stopwatch();
@@ -360,6 +371,34 @@ namespace Yolov5Net.Scorer
             _inferenceSession = new InferenceSession(File.ReadAllBytes(weights), opts ?? new SessionOptions());
             sw.Stop();
             Debug.WriteLine(sw.ElapsedMilliseconds);
+
+            LoadModel(yoloModel);
+        }
+
+        private void LoadModel(YoloModel yoloModel)
+        {
+
+            // Labels 列表没有标签
+            if (yoloModel.Labels.Count == 0)
+            {
+                NodeMetadata data = _inferenceSession.OutputMetadata.Values.First();
+                // 获取
+                if (data.Dimensions.Length == 3)
+                {
+                    // 类别数量      data.Dimension：1*25200*(classCount+5)
+                    int classCount = data.Dimensions[2] - 5;
+                    for (int i = 0; i < classCount; i++)
+                    {
+                        YoloLabel yoloLabel = new YoloLabel(i, "Class" + i, YoloLabel.Colors[i % YoloLabel.Colors.Length]);
+                        yoloModel.Labels.Add(yoloLabel);
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine("获取onnx输出元数据失败。");
+                }
+            }
+            _model = yoloModel;
         }
 
         /// <summary>
@@ -367,7 +406,6 @@ namespace Yolov5Net.Scorer
         /// </summary>
         public YoloScorer(YoloModel yoloModel, Stream weights, SessionOptions opts = null)
         {
-            _model = yoloModel;
             oclCaller = new OclCaller();
             oclCaller.Init();
 
@@ -375,6 +413,7 @@ namespace Yolov5Net.Scorer
             {
                 _inferenceSession = new InferenceSession(reader.ReadBytes((int)weights.Length), opts ?? new SessionOptions());
             }
+            LoadModel(yoloModel);
         }
 
         /// <summary>
@@ -382,11 +421,11 @@ namespace Yolov5Net.Scorer
         /// </summary>
         public YoloScorer(YoloModel yoloModel, byte[] weights, SessionOptions opts = null)
         {
-            _model = yoloModel;
             oclCaller = new OclCaller();
             oclCaller.Init();
 
             _inferenceSession = new InferenceSession(weights, opts ?? new SessionOptions());
+            LoadModel(yoloModel);
         }
 
         /// <summary>
