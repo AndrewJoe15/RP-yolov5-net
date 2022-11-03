@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using System.Xml.Serialization;
 
 namespace Yolov5Net.Scorer
 {
@@ -10,7 +11,16 @@ namespace Yolov5Net.Scorer
         public int Id { get; set; }
         public string Name { get; set; }
         public YoloLabelKind Kind { get; set; }
+        [XmlIgnore()] //Color对象没法序列化
         public Color Color { get; set; }
+
+        // 用于序列化Color
+        [XmlElement(nameof(Color))]
+        public string XmlColor
+        {
+            get => Color.Name;
+            set => Color = Color.FromName(value);
+        }
 
         public YoloLabel()
         {

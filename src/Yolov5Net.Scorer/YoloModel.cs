@@ -1,12 +1,13 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel;
+using System.Xml.Serialization;
 
 namespace Yolov5Net.Scorer
 {
     /// <summary>
     /// Model descriptor.
     /// </summary>
-    public abstract class YoloModel : INotifyPropertyChanged
+    public class YoloModel : INotifyPropertyChanged
     {
         public int Width { get; set; } = 640;
         public int Height { get; set; } = 640;
