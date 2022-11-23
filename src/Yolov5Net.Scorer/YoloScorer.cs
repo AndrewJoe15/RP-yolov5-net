@@ -372,12 +372,12 @@ namespace Yolov5Net.Scorer
             sw.Stop();
             Debug.WriteLine(sw.ElapsedMilliseconds);
 
-            LoadModel(yoloModel);
+            AddLabels(yoloModel);
+            _model = yoloModel;
         }
 
-        private void LoadModel(YoloModel yoloModel)
+        private void AddLabels(YoloModel yoloModel)
         {
-
             // Labels 列表没有标签
             if (yoloModel.Labels.Count == 0)
             {
@@ -398,7 +398,6 @@ namespace Yolov5Net.Scorer
                     Debug.WriteLine("获取onnx输出元数据失败。");
                 }
             }
-            _model = yoloModel;
         }
 
         /// <summary>
@@ -413,7 +412,7 @@ namespace Yolov5Net.Scorer
             {
                 _inferenceSession = new InferenceSession(reader.ReadBytes((int)weights.Length), opts ?? new SessionOptions());
             }
-            LoadModel(yoloModel);
+            AddLabels(yoloModel);
         }
 
         /// <summary>
@@ -425,7 +424,7 @@ namespace Yolov5Net.Scorer
             oclCaller.Init();
 
             _inferenceSession = new InferenceSession(weights, opts ?? new SessionOptions());
-            LoadModel(yoloModel);
+            AddLabels(yoloModel);
         }
 
         /// <summary>
